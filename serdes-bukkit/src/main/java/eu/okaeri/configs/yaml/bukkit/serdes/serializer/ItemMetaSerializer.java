@@ -41,6 +41,10 @@ public class ItemMetaSerializer implements ObjectSerializer<ItemMeta> {
             data.addCollection("lore", serializedLore, String.class);
         }
 
+        if (itemMeta.hasCustomModelData()) {
+            data.add("customModelData", itemMeta.getCustomModelData());
+        }
+
         if (!itemMeta.getEnchants().isEmpty()) {
             data.addAsMap("enchantments", itemMeta.getEnchants(), Enchantment.class, Integer.class);
         }
@@ -56,6 +60,8 @@ public class ItemMetaSerializer implements ObjectSerializer<ItemMeta> {
         List<String> lore = data.containsKey("lore")
             ? data.getAsList("lore", String.class)
             : Collections.emptyList();
+
+        Integer customModelData = data.get("customModelData", Integer.class);
 
         Map<Enchantment, Integer> enchantments = data.containsKey("enchantments")
             ? data.getAsMap("enchantments", Enchantment.class, Integer.class)
@@ -75,6 +81,10 @@ public class ItemMetaSerializer implements ObjectSerializer<ItemMeta> {
         }
 
         itemMeta.lore(lore.stream().map(this::deserializeMiniMessage).collect(Collectors.toList()));
+
+        if (customModelData != null) {
+            itemMeta.setCustomModelData(customModelData);
+        }
 
         enchantments.forEach((enchantment, level) -> itemMeta.addEnchant(enchantment, level, true));
         itemMeta.addItemFlags(itemFlags.toArray(new ItemFlag[0]));
