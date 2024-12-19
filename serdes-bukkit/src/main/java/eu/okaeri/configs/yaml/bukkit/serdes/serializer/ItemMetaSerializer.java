@@ -5,7 +5,8 @@ import eu.okaeri.configs.serdes.DeserializationData;
 import eu.okaeri.configs.serdes.ObjectSerializer;
 import eu.okaeri.configs.serdes.SerializationData;
 import lombok.NonNull;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemFlag;
@@ -20,8 +21,7 @@ import java.util.stream.Collectors;
 
 public class ItemMetaSerializer implements ObjectSerializer<ItemMeta> {
 
-    private static final char COLOR_CHAR = '\u00A7';
-    private static final char ALT_COLOR_CHAR = '&';
+    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
 
     @Override
     public boolean supports(@NonNull Class<? super ItemMeta> type) {
@@ -30,13 +30,15 @@ public class ItemMetaSerializer implements ObjectSerializer<ItemMeta> {
 
     @Override
     public void serialize(@NonNull ItemMeta itemMeta, @NonNull SerializationData data, @NonNull GenericsDeclaration generics) {
-
         if (itemMeta.hasDisplayName()) {
-            data.add("display", this.decolor(itemMeta.getDisplayName()));
+            data.add("display", serializeMiniMessage(itemMeta.displayName()));
         }
 
         if (itemMeta.hasLore()) {
-            data.addCollection("lore", this.decolor(itemMeta.getLore()), String.class);
+            List<String> serializedLore = itemMeta.lore().stream()
+                .map(this::serializeMiniMessage)
+                .collect(Collectors.toList());
+            data.addCollection("lore", serializedLore, String.class);
         }
 
         if (!itemMeta.getEnchants().isEmpty()) {
@@ -50,12 +52,7 @@ public class ItemMetaSerializer implements ObjectSerializer<ItemMeta> {
 
     @Override
     public ItemMeta deserialize(@NonNull DeserializationData data, @NonNull GenericsDeclaration generics) {
-
         String displayName = data.get("display", String.class);
-        if (displayName == null) { // legacy
-            displayName = data.get("display-name", String.class);
-        }
-
         List<String> lore = data.containsKey("lore")
             ? data.getAsList("lore", String.class)
             : Collections.emptyList();
@@ -68,20 +65,16 @@ public class ItemMetaSerializer implements ObjectSerializer<ItemMeta> {
             ? data.getAsList("flags", ItemFlag.class)
             : Collections.emptyList());
 
-        if (data.containsKey("item-flags")) { // legacy
-            itemFlags.addAll(data.getAsList("item-flags", ItemFlag.class));
-        }
-
         ItemMeta itemMeta = new ItemStack(Material.COBBLESTONE).getItemMeta();
         if (itemMeta == null) {
             throw new IllegalStateException("Cannot extract empty ItemMeta from COBBLESTONE");
         }
 
         if (displayName != null) {
-            itemMeta.setDisplayName(this.color(displayName));
+            itemMeta.displayName(deserializeMiniMessage(displayName));
         }
 
-        itemMeta.setLore(this.color(lore));
+        itemMeta.lore(lore.stream().map(this::deserializeMiniMessage).collect(Collectors.toList()));
 
         enchantments.forEach((enchantment, level) -> itemMeta.addEnchant(enchantment, level, true));
         itemMeta.addItemFlags(itemFlags.toArray(new ItemFlag[0]));
@@ -89,19 +82,12 @@ public class ItemMetaSerializer implements ObjectSerializer<ItemMeta> {
         return itemMeta;
     }
 
-    private List<String> color(List<String> text) {
-        return text.stream().map(this::color).collect(Collectors.toList());
+    private String serializeMiniMessage(Component component) {
+        return MINI_MESSAGE.serialize(component)
+            .replace("<!italic>", "");
     }
 
-    private String color(String text) {
-        return ChatColor.translateAlternateColorCodes(ALT_COLOR_CHAR, text);
-    }
-
-    private List<String> decolor(List<String> text) {
-        return text.stream().map(this::decolor).collect(Collectors.toList());
-    }
-
-    private String decolor(String text) {
-        return text.replace(COLOR_CHAR + "", ALT_COLOR_CHAR + "");
+    private Component deserializeMiniMessage(String text) {
+        return MINI_MESSAGE.deserialize("<!italic>" + text);
     }
 }
